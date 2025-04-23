@@ -1,10 +1,8 @@
 import json
 from datetime import datetime
-
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter()
-
 
 class DataAnalyser:
     def __init__(self, json_data):
@@ -42,9 +40,7 @@ class DataAnalyser:
     def analyze_by_category(self):
         results = {}
         for category in self.dataset_categories:
-            category_records = [
-                rec for rec in self.records if rec["dataset_type"] == category
-            ]
+            category_records = [rec for rec in self.records if rec["dataset_type"] == category]
             results[category] = self.generate_analysis(category_records, category)
         return results
 
@@ -56,6 +52,7 @@ class DataAnalyser:
             "correlations": {},
             "distribution": {},
             "patterns": {},
+            "anomalies": {},
         }
 
         numeric_keys = set()
@@ -67,11 +64,7 @@ class DataAnalyser:
         if numeric_keys:
             insights["summary"]["statistics"] = {}
             for key in numeric_keys:
-                values = [
-                    rec[key]
-                    for rec in records
-                    if key in rec and isinstance(rec[key], (int, float))
-                ]
+                values = [rec[key] for rec in records if isinstance(rec.get(key), (int, float))]
                 if values:
                     insights["summary"]["statistics"][key] = {
                         "min": min(values),
@@ -79,10 +72,8 @@ class DataAnalyser:
                         "mean": sum(values) / len(values),
                         "median": sorted(values)[len(values) // 2],
                         "std_dev": (
-                            sum((x - sum(values) / len(values)) ** 2 for x in values)
-                            / len(values)
-                        )
-                        ** 0.5,
+                            sum((x - sum(values) / len(values)) ** 2 for x in values) / len(values)
+                        ) ** 0.5,
                     }
 
         insights["trends"] = self.detect_trends(records)
@@ -93,32 +84,44 @@ class DataAnalyser:
 
         return insights
 
-    def detect_anomalies(self, records):
-        anomalies = {}
-        numeric_keys = set()
-        for record in records:
-            for key, value in record.items():
-                if isinstance(value, (int, float)):
-                    numeric_keys.add(key)
+    def detect_trends(self, records):
+        trends = {}
+        timestamps = [rec["timestamp"] for rec in records if rec["timestamp"]]
+        timestamps.sort()
+        if timestamps:
+            trends["first_event"] = timestamps[0].isoformat()
+            trends["last_event"] = timestamps[-1].isoformat()
+            trends["event_count"] = len(timestamps)
+        return trends
 
+    def detect_correlations(self, records, numeric_keys):
+        correlations = {}
+        for key1 in numeric_keys:
+            for key2 in numeric_keys:
+                if key1 != key2:
+                    values1 = [rec[key1] for rec in records if isinstance(rec.get(key1), (int, float))]
+                    values2 = [rec[key2] for rec in records if isinstance(rec.get(key2), (int, float))]
+                    if len(values1) == len(values2) and len(values1) > 5:
+                        correlation = sum(a * b for a, b in zip(values1, values2)) / len(values1)
+                        correlations[f"{key1}-{key2}"] = correlation
+        return correlations
+
+    def detect_distribution(self, records, numeric_keys):
+        distribution = {}
         for key in numeric_keys:
-            values = [
-                rec[key]
-                for rec in records
-                if key in rec and isinstance(rec[key], (int, float))
-            ]
-            if len(values) > 5:
-                mean_val = sum(values) / len(values)
-                std_dev = (
-                    sum((x - mean_val) ** 2 for x in values) / len(values)
-                ) ** 0.5
-                anomalies[key] = [
-                    rec
-                    for rec in records
-                    if rec.get(key) and abs(rec[key] - mean_val) > 2 * std_dev
-                ]
-
-        return anomalies
+            values = [rec[key] for rec in records if isinstance(rec.get(key), (int, float))]
+            if values:
+                values_sorted = sorted(values)
+                distribution[key] = {
+                    "min": min(values_sorted),
+                    "max": max(values_sorted),
+                    "quartiles": {
+                        "Q1": values_sorted[len(values_sorted) // 4],
+                        "Q2": values_sorted[len(values_sorted) // 2],
+                        "Q3": values_sorted[(3 * len(values_sorted)) // 4],
+                    },
+                }
+        return distribution
 
     def detect_patterns(self, records):
         patterns = {}
@@ -129,94 +132,52 @@ class DataAnalyser:
                     numeric_keys.add(key)
 
         for key in numeric_keys:
-            values = [
-                rec[key]
-                for rec in records
-                if key in rec and isinstance(rec[key], (int, float))
-            ]
+            values = [rec[key] for rec in records if isinstance(rec.get(key), (int, float))]
             if len(values) > 5:
                 median_val = sorted(values)[len(values) // 2]
                 patterns[key] = {
                     "low_count": sum(1 for x in values if x < median_val),
                     "high_count": sum(1 for x in values if x >= median_val),
                     "trend": (
-                        "increasing"
-                        if values[-1] > values[0]
-                        else "decreasing" if values[-1] < values[0] else "stable"
+                        "increasing" if values[-1] > values[0]
+                        else "decreasing" if values[-1] < values[0]
+                        else "stable"
                     ),
                 }
-
         return patterns
 
-    def detect_trends(self, records):
-        trends = {}
-        timestamps = [rec["timestamp"] for rec in records if rec["timestamp"]]
-        timestamps.sort()
+    def detect_anomalies(self, records):
+        anomalies = {}
+        numeric_keys = set()
+        for record in records:
+            for key, value in record.items():
+                if isinstance(value, (int, float)):
+                    numeric_keys.add(key)
 
-        if timestamps:
-            trends["first_event"] = timestamps[0].isoformat()
-            trends["last_event"] = timestamps[-1].isoformat()
-            trends["event_count"] = len(timestamps)
-
-        return trends
-
-    def detect_correlations(self, records, numeric_keys):
-        correlations = {}
-        for key1 in numeric_keys:
-            for key2 in numeric_keys:
-                if key1 != key2:
-                    values1 = [
-                        rec[key1]
-                        for rec in records
-                        if key1 in rec and isinstance(rec[key1], (int, float))
-                    ]
-                    values2 = [
-                        rec[key2]
-                        for rec in records
-                        if key2 in rec and isinstance(rec[key2], (int, float))
-                    ]
-
-                    if len(values1) == len(values2) and len(values1) > 5:
-                        correlation = sum(
-                            a * b for a, b in zip(values1, values2)
-                        ) / len(values1)
-                        correlations[f"{key1}-{key2}"] = correlation
-
-        return correlations
-
-    def detect_distribution(self, records, numeric_keys):
-        distribution = {}
         for key in numeric_keys:
-            values = [
-                rec[key]
-                for rec in records
-                if key in rec and isinstance(rec[key], (int, float))
-            ]
-            if values:
-                distribution[key] = {
-                    "min": min(values),
-                    "max": max(values),
-                    "quartiles": {
-                        "Q1": sorted(values)[len(values) // 4],
-                        "Q2": sorted(values)[len(values) // 2],
-                        "Q3": sorted(values)[(3 * len(values)) // 4],
-                    },
-                }
-        return distribution
+            values = [rec[key] for rec in records if isinstance(rec.get(key), (int, float))]
+            if len(values) > 5:
+                mean_val = sum(values) / len(values)
+                std_dev = (sum((x - mean_val) ** 2 for x in values) / len(values)) ** 0.5
+                anomalies[key] = [
+                    rec for rec in records
+                    if rec.get(key) is not None and abs(rec[key] - mean_val) > 2 * std_dev
+                ]
+        return anomalies
 
     def run_analysis(self):
         return self.analyze_by_category()
 
 
 @router.post("/analyse/")
-def analyze_data(file: UploadFile = File(...)):
+async def analyse(request: Request):
     try:
-        data = json.loads(file.file.read().decode("utf-8"))
+        json_data = await request.json()
 
-        if not data.get("cleaned_data", []):
+        if not json_data.get("cleaned_data", []):
             return {"status": "success", "analysis_results": {}}
 
-        analyzer = DataAnalyser(data)
+        analyzer = DataAnalyser(json_data)
         results = analyzer.run_analysis()
         return {"status": "success", "analysis_results": results}
     except Exception as e:
