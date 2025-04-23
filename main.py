@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from nba_analysis import router as nba_router
+from property_impact import router as property_router
 
 app = FastAPI(
     title="Crypto-NBA Event Intelligence API",
@@ -19,6 +20,7 @@ app.add_middleware(
 
 # Mount your router
 app.include_router(nba_router)
+app.include_router(property_router)
 
 @app.get("/")
 def read_root():
