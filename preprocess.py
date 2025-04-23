@@ -1,35 +1,28 @@
-import json
+from fastapi import APIRouter, HTTPException, Request
 import requests
-from tkinter import Tk, filedialog
 
-# Your deployed API endpoint
-API_URL = "https://h0gn7fm71g.execute-api.ap-southeast-2.amazonaws.com/dev/preprocess"
+router = APIRouter()
 
-def choose_file():
-    """Open a file dialog and return the selected file path."""
-    Tk().withdraw()  # Hide root window
-    file_path = filedialog.askopenfilename(
-        title="Select JSON File",
-        filetypes=[("JSON Files", "*.json")]
-    )
-    return file_path
+# External preprocessing API
+PREPROCESS_API_URL = "https://h0gn7fm71g.execute-api.ap-southeast-2.amazonaws.com/dev/preprocess"
 
-def upload_and_preprocess(file_path):
-    with open(file_path, "rb") as f:
-        files = {"file": (file_path.split("/")[-1], f, "application/json")}
-        response = requests.post(API_URL, files=files)
+@router.post("/preprocess/")
+async def preprocess_json(request: Request):
+    try:
+        # Parse raw JSON input
+        input_data = await request.json()
 
-    if response.status_code == 200:
-        data = response.json()
-        print(json.dumps(data, indent=2))
-    else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+        # Send it to external API as a file-like object using 'files' param
+        response = requests.post(
+            PREPROCESS_API_URL,
+            files={"file": ("input.json", str(input_data).replace("'", '"'), "application/json")}
+        )
 
-if __name__ == "__main__":
-    print("Choose a JSON file to upload for preprocessing.")
-    selected_file = choose_file()
-    if selected_file:
-        upload_and_preprocess(selected_file)
-    else:
-        print("No file selected.")
+        # Forward the processed data or error message
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
