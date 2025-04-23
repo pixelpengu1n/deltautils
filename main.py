@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from nba_analysis import router as nba_router
 from property_impact import router as property_router
+from med_analysis import router as med_router
+from preprocess import router as preprocess_router
+from analytics import router as analytics_router
 
 app = FastAPI(
     title="Crypto-NBA Event Intelligence API",
@@ -17,18 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Allow CORS for frontend apps
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Mount your router
 app.include_router(nba_router)
 app.include_router(property_router)
+app.include_router(med_router)
+app.include_router(preprocess_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 def read_root():
