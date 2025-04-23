@@ -5,14 +5,22 @@ from property_impact import router as property_router
 
 app = FastAPI(
     title="Crypto-NBA Event Intelligence API",
-    description="Analyzes the impact of cryptocurrency trends on NBA outcomes and behavior.",
+    description="Analyzes the impact of cryptocurrency trends on other outcomes and behavior.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://main.d3sl5dh34mbovk.amplifyapp.com", "https://deltautils-1.onrender.com"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Allow CORS for frontend apps
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with frontend URL in production
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
