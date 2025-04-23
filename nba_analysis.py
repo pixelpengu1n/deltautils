@@ -18,8 +18,6 @@ NBA_TEAMS = [
     "Miami", "Philadelphia", "Washington", "Charlotte", "Brooklyn", "Orlando"
 ]
 
-import os
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
  
 openai.api_key = "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"
@@ -50,7 +48,7 @@ def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: 
     except Exception as e:
         return []
  
-def generate_summary_insight(events, team1, team2, start, end):
+def generate_summary_insight(events, team1, team2, start, end, ticker):
     price_points = [(e["event_time"], e["open"], e["close"], e["volume"]) for e in events if e.get("close") is not None]
     summary_lines = [
         f"{d.strftime('%Y-%m-%d')}: Open=${o:.2f}, Close=${c:.2f}, Volume={int(v)}"
@@ -58,21 +56,22 @@ def generate_summary_insight(events, team1, team2, start, end):
     ]
     history = "\n".join(summary_lines)
     prompt = f"""
-You are a sports and market analyst AI. Given the following crypto price history and an NBA matchup between {team1} and {team2}, generate an analysis of how crypto trends may influence NBA outcomes and fan behavior.
- 
+You are a sports and market analyst AI. Given the following crypto price history for {ticker} and an NBA matchup between {team1} and {team2}, generate an analysis of how {ticker} trends may influence NBA outcomes and fan behavior.
+
 Crypto price history ({len(price_points)} days) between {start} and {end}:
 {history}
- 
+
 Use these factors:
 - Sponsorships (e.g., Crypto.com Arena, FTX)
 - Player endorsements (e.g., NFTs, crypto deals)
 - Fan engagement and betting trends (e.g., DraftKings, Coinbase)
 - Social media sentiment and media coverage
- 
+
 Assume NBA performance metrics are available. Include plausible interpretations as if analyzing real stats.
- 
+
 Return a detailed multi-paragraph summary with insights and 2–3 links.
 """
+
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
@@ -123,7 +122,7 @@ async def analyze_impact(
  
     events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date, interval)
     timeline_img = generate_timeline_plot(events) if events else ""
-    summary = generate_summary_insight(events, team1, team2, start_date, end_date)
+    summary = generate_summary_insight(events, team1, team2, start_date, end_date, ticker)
  
     return {
         "meta": {
