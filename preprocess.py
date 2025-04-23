@@ -1,16 +1,18 @@
-import json
+from fastapi import APIRouter, HTTPException, Request
 import requests
+import json
+
+router = APIRouter()
 
 # AWS API Gateway Endpoints
 PREPROCESS_URL = "https://h0gn7fm71g.execute-api.ap-southeast-2.amazonaws.com/dev/preprocess"
 ANALYSE_URL = "https://h0gn7fm71g.execute-api.ap-southeast-2.amazonaws.com/dev/analyse"
 
-def main():
-    print("Paste your raw JSON data below:")
-    user_input = input()
-
+@router.post("/pipeline/")
+async def preprocess_and_analyse(request: Request):
     try:
-        raw_data = json.loads(user_input)  # Validate & parse input
+        # Step 0: Receive raw input JSON
+        raw_data = await request.json()
 
         # Step 1: Preprocess
         preprocess_response = requests.post(
@@ -19,28 +21,31 @@ def main():
             data=json.dumps(raw_data)
         )
 
-        if preprocess_response.status_code == 200:
-            preprocessed_data = preprocess_response.json()
-
-            # Step 2: Analyse
-            analyse_response = requests.post(
-                ANALYSE_URL,
-                headers={"Content-Type": "application/json"},
-                data=json.dumps(preprocessed_data)
+        if preprocess_response.status_code != 200:
+            raise HTTPException(
+                status_code=preprocess_response.status_code,
+                detail=f"Preprocessing failed: {preprocess_response.text}"
             )
 
-            if analyse_response.status_code == 200:
-                analysed_data = analyse_response.json()
-                print(json.dumps(analysed_data, indent=4))
-            else:
-                print(f"\nError during analysis: {analyse_response.status_code}")
-                print(analyse_response.text)
-        else:
-            print(f"\nError during preprocessing: {preprocess_response.status_code}")
-            print(preprocess_response.text)
+        preprocessed_data = preprocess_response.json()
+
+        # Step 2: Analyse
+        analyse_response = requests.post(
+            ANALYSE_URL,
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(preprocessed_data)
+        )
+
+        if analyse_response.status_code != 200:
+            raise HTTPException(
+                status_code=analyse_response.status_code,
+                detail=f"Analysis failed: {analyse_response.text}"
+            )
+
+        analysed_data = analyse_response.json()
+        return analysed_data
 
     except json.JSONDecodeError:
-        print("Invalid JSON input. Please check your data.")
-
-if __name__ == "__main__":
-    main()
+        raise HTTPException(status_code=400, detail="Invalid JSON input.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
