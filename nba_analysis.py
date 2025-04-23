@@ -7,6 +7,7 @@ import openai
 from dateutil.parser import parse as parse_date
 import pandas as pd
 import yfinance as yf
+import os
  
 router = APIRouter()
  
@@ -17,9 +18,9 @@ NBA_TEAMS = [
     "LA Lakers", "LA Clippers", "Utah", "Portland", "Toronto", "New Orleans",
     "Miami", "Philadelphia", "Washington", "Charlotte", "Brooklyn", "Orlando"
 ]
- 
-openai.api_key = "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"
- 
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: str):
     try:
         data = yf.download(ticker, start=start, end=end, interval=interval)
