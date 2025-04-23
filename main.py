@@ -13,7 +13,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://deltautils-1.onrender.com"],  
+    allow_origins=["https://main.d3sl5dh34mbovk.amplifyapp.com", "https://deltautils-1.onrender.com"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
