@@ -3,10 +3,11 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import io
 import base64
-import openai
 from dateutil.parser import parse as parse_date
 import pandas as pd
 import yfinance as yf
+import os
+from openai import OpenAI
  
 router = APIRouter()
  
@@ -18,9 +19,8 @@ NBA_TEAMS = [
     "Miami", "Philadelphia", "Washington", "Charlotte", "Brooklyn", "Orlando"
 ]
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
- 
-openai.api_key = "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"
  
 def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: str):
     try:
@@ -73,8 +73,8 @@ Return a detailed multi-paragraph summary with insights and 2–3 links.
 """
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+        response = client.chat.completions.create(
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=700
         )
