@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from datetime import datetime
 import matplotlib.pyplot as plt
 import io
@@ -8,9 +9,9 @@ import pandas as pd
 import yfinance as yf
 import os
 from openai import OpenAI
- 
+
 router = APIRouter()
- 
+
 NBA_TEAMS = [
     "Cleveland", "Memphis", "Denver", "Oklahoma City", "Atlanta", "Chicago",
     "Indiana", "Boston", "New York", "Sacramento", "Detroit", "Dallas",
@@ -21,16 +22,16 @@ NBA_TEAMS = [
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
- 
+
 def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: str):
     try:
         data = yf.download(ticker, start=start, end=end, interval=interval)
         if data.empty:
             return []
- 
+
         data.reset_index(inplace=True)
         data["Date"] = pd.to_datetime(data["Date"], errors="coerce").dt.strftime("%Y-%m-%dT%H:%M:%SZ")
- 
+
         events = []
         for _, row in data.iterrows():
             event = {
@@ -47,7 +48,8 @@ def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: 
         return events
     except Exception as e:
         return []
- 
+
+
 def generate_summary_insight(events, team1, team2, start, end, ticker):
     price_points = [(e["event_time"], e["open"], e["close"], e["volume"]) for e in events if e.get("close") is not None]
     summary_lines = [
@@ -71,7 +73,6 @@ Assume NBA performance metrics are available. Include plausible interpretations 
 
 Return a detailed multi-paragraph summary with insights and 2–3 links.
 """
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -81,13 +82,14 @@ Return a detailed multi-paragraph summary with insights and 2–3 links.
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"[AI Summary unavailable: {e}]"
- 
+
+
 def generate_timeline_plot(events):
     dates = [e["event_time"] for e in events]
     types = [e.get("event_type", "Unknown") for e in events]
     if not dates:
-        return ""
- 
+        return generate_placeholder_plot("No crypto events available")
+
     plt.figure(figsize=(10, 2))
     plt.hlines(1, min(dates), max(dates), colors="lightgray")
     plt.eventplot(dates, lineoffsets=1, linelengths=0.4, colors="blue")
@@ -101,30 +103,41 @@ def generate_timeline_plot(events):
     plt.close()
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
- 
+
+
+def generate_placeholder_plot(message="No events available"):
+    plt.figure(figsize=(8, 2))
+    plt.text(0.5, 0.5, message, fontsize=12, ha='center')
+    plt.axis('off')
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
 @router.get("/impact/nba/analysis")
 async def analyze_impact(
     team1: str = "LA Lakers",
     team2: str = "Boston",
     start_date: str = Query(..., description="Start date for crypto data (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date for crypto data (YYYY-MM-DD)"),
-    ticker: str = Query("BTC-USD", description="Crypto ticker"),
-    interval: str = Query("1d", description="Data interval (e.g., 1d)")
+    ticker: str = Query("BTC-USD", description="Crypto ticker")
 ):
     if team1 not in NBA_TEAMS or team2 not in NBA_TEAMS:
         raise HTTPException(status_code=400, detail="Invalid NBA team names.")
- 
+
     try:
         parse_date(start_date)
         parse_date(end_date)
     except:
         raise HTTPException(status_code=400, detail="Invalid date format.")
- 
-    events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date, interval)
-    timeline_img = generate_timeline_plot(events) if events else ""
+
+    events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date, "1d")
+    timeline_img = generate_timeline_plot(events)
     summary = generate_summary_insight(events, team1, team2, start_date, end_date, ticker)
- 
-    return {
+
+    return JSONResponse(content={
         "meta": {
             "ticker": ticker,
             "team1": team1,
@@ -138,4 +151,4 @@ async def analyze_impact(
         "insight": {
             "summary": summary
         }
-    }
+    })
