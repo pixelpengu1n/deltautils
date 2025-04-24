@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from datetime import datetime
+import matplotlib.pyplot as plt
+import io
+import base64
 from dateutil.parser import parse as parse_date
 import pandas as pd
 import yfinance as yf
@@ -27,12 +30,12 @@ def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: 
             return []
 
         data.reset_index(inplace=True)
-        data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
+        data["Date"] = pd.to_datetime(data["Date"], errors="coerce").dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         events = []
         for _, row in data.iterrows():
             event = {
-                "event_time": row["Date"],
+                "event_time": datetime.fromisoformat(row["Date"].replace("Z", "+00:00")),
                 "event_type": "crypto_price_update",
                 "description": f"Price update for {ticker}",
                 "open": row.get("Open"),
@@ -81,30 +84,36 @@ Return a detailed multi-paragraph summary with insights and 2–3 links.
         return f"[AI Summary unavailable: {e}]"
 
 
-def prepare_chart_data(events):
-    """
-    Prepare time series data for price and volume charting.
-    """
-    chart_data = {
-        "dates": [],
-        "open": [],
-        "close": [],
-        "high": [],
-        "low": [],
-        "volume": []
-    }
+def generate_timeline_plot(events):
+    dates = [e["event_time"] for e in events]
+    types = [e.get("event_type", "Unknown") for e in events]
+    if not dates:
+        return generate_placeholder_plot("No crypto events available")
 
-    for event in events:
-        ts = event.get("event_time")
-        if ts:
-            chart_data["dates"].append(ts.strftime("%Y-%m-%d"))
-            chart_data["open"].append(event.get("open"))
-            chart_data["close"].append(event.get("close"))
-            chart_data["high"].append(event.get("high"))
-            chart_data["low"].append(event.get("low"))
-            chart_data["volume"].append(event.get("volume"))
+    plt.figure(figsize=(10, 2))
+    plt.hlines(1, min(dates), max(dates), colors="lightgray")
+    plt.eventplot(dates, lineoffsets=1, linelengths=0.4, colors="blue")
+    for i, d in enumerate(dates):
+        plt.text(d, 1.02, types[i], rotation=45, ha='right', fontsize=8)
+    plt.title("Crypto Events Timeline")
+    plt.yticks([])
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
 
-    return chart_data
+
+def generate_placeholder_plot(message="No events available"):
+    plt.figure(figsize=(8, 2))
+    plt.text(0.5, 0.5, message, fontsize=12, ha='center')
+    plt.axis('off')
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
 
 
 @router.get("/impact/nba/analysis")
@@ -125,7 +134,7 @@ async def analyze_impact(
         raise HTTPException(status_code=400, detail="Invalid date format.")
 
     events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date, "1d")
-    chart_data = prepare_chart_data(events)
+    timeline_img = generate_timeline_plot(events)
     summary = generate_summary_insight(events, team1, team2, start_date, end_date, ticker)
 
     return JSONResponse(content={
@@ -136,7 +145,9 @@ async def analyze_impact(
             "cryptoStartDate": start_date,
             "cryptoEndDate": end_date,
         },
-        "chartData": chart_data,
+        "chart": {
+            "timelineImageBase64": timeline_img
+        },
         "insight": {
             "summary": summary
         }
