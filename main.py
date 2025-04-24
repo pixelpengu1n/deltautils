@@ -19,6 +19,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173", 
+        "https://main.d3sl5dh34mbovk.amplifyapp.com",
+        "https://deltautils-1.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount your router
 app.include_router(nba_router)
 app.include_router(property_router)
