@@ -10,7 +10,7 @@ import os
 from openai import OpenAI
 
 router = APIRouter()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # ✅ Secure usage
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) 
 
 def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: str):
     try:
@@ -38,7 +38,7 @@ def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: 
     except Exception:
         return []
 
-def generate_property_summary(events, area, start, end):
+def generate_property_summary(ticker, events, area, start, end):
     price_points = [(e["event_time"], e["open"], e["close"], e["volume"]) for e in events if e.get("close") is not None]
     summary_lines = [
         f"{d.strftime('%Y-%m-%d')}: Open=${o:.2f}, Close=${c:.2f}, Volume={int(v)}"
@@ -46,7 +46,7 @@ def generate_property_summary(events, area, start, end):
     ]
     history = "\n".join(summary_lines)
     prompt = f"""
-You are an economic and real estate analyst AI. Analyze how the following cryptocurrency price changes between {start} and {end} could have influenced the property market in {area}.
+You are an economic and real estate analyst AI. Analyze how the following cryptocurrency {ticker} price changes between {start} and {end} could have influenced the property market in {area}.
 
 Crypto price history ({len(price_points)} days):
 {history}
@@ -105,7 +105,7 @@ async def analyze_property_impact(
 
     events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date, interval)
     timeline_img = generate_timeline_plot(events) if events else ""
-    summary = generate_property_summary(events, area, start_date, end_date)
+    summary = generate_property_summary(ticker, events, area, start_date, end_date)
 
     return {
         "meta": {

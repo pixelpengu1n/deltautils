@@ -39,7 +39,7 @@ def fetch_crypto_events_from_yahoo(ticker: str, start: str, end: str, interval: 
         print(f"Error fetching crypto data: {e}")
         return []
 
-def generate_medical_summary(events, region, start, end):
+def generate_medical_summary(ticker, events, region, start, end):
     price_points = [(e["event_time"], e["open"], e["close"], e["volume"]) for e in events if e.get("close") is not None]
     history = "\n".join(
         f"{d.strftime('%Y-%m-%d')}: Open=${o:.2f}, Close=${c:.2f}, Volume={int(v)}"
@@ -47,7 +47,7 @@ def generate_medical_summary(events, region, start, end):
     )
 
     prompt = f"""
-You are a global health and economics research AI. Analyze how the following cryptocurrency fluctuations from {start} to {end} might have impacted the healthcare domain in {region}.
+You are a global health and economics research AI. Analyze how the following cryptocurrency {ticker} fluctuations from {start} to {end} might have impacted the healthcare domain in {region}.
 
 Crypto price history ({len(price_points)} days):
 {history}
@@ -107,7 +107,7 @@ async def analyze_medical_impact(
 
     events = fetch_crypto_events_from_yahoo(ticker, start_date, end_date)
     timeline_img = generate_timeline_plot(events) if events else ""
-    summary = generate_medical_summary(events, region, start_date, end_date)
+    summary = generate_medical_summary(ticker, events, region, start_date, end_date)
 
     return {
         "meta": {
